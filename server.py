@@ -4,129 +4,70 @@ import sys
 import signal
 from communication import send, receive
 
-BUFSIZ = 1024
 
-def broadcast_data (sock, message):
-	#Do not send the message to master socket and the client who has send us the message
-	for socket in CONNECTION_LIST:
-		if socket != server_socket and socket != sock :
-			try :
-				socket.send(message)
-			except :
-				# broken socket connection may be, chat client pressed ctrl+c for example
-				socket.close()
-				CONNECTION_LIST.remove(socket)
-class ChatServer(object):
-    """ Simple chat server using select """
-
-    def __init__(self, port=11490, backlog=5):
-        self.clients = 0
-        # Client map
-        self.clientmap = {}
-        # Output socket list
-        self.outputs = []
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server.bind(('', port))
-        print('Listening to port', port, '...')
-        self.server.listen(backlog)
-        conn, addr = self.server.accept();
-        # Trap keyboard interrupts
-        #signal.signal(signal.SIGINT, self.sighandler)
-
-    def sighandler(self, signum, frame):
-        # Close the server
-        print('Shutting down server...')
-        # Close existing client sockets
-        for o in self.outputs:
-            o.close()
-
-        self.server.close()
-
-    def getname(self, client):
-
-        # Return the printable name of the
-        # client, given its socket...
-        info = self.clientmap[client]
-        host, name = info[0][0], info[1]
-        return '@'.join((name, host))
-
-    def serve(self):
-
-        inputs = [self.server, sys.stdin]
-        self.outputs = []
-
-        running = 1
-
-        while True:
-
-            try:
-                inputready, outputready, exceptready = select.select(inputs, self.outputs, [])
-            except select.error as e:
-                break
-            except socket.error as e:
-                break
-
-            for s in inputready:
-
-                if s == self.server:
-                    # handle the server socket
-                    client, address = self.server.accept()
-                    print('chatserver: got connection %d from %s' % (client.fileno(), address))
-                    # Read the login name
-                    cname = receive(client).split('NAME: ')[1]
-
-                    # Compute client name and send back
-                    self.clients += 1
-                    send(client, 'CLIENT: ' + str(address[0]))
-                    inputs.append(client)
-
-                    self.clientmap[client] = (address, cname)
-                    # Send joining information to other clients
-                    msg = '\n(Connected: New client (%d) from %s)' % (self.clients, self.getname(client))
-                    for o in self.outputs:
-                        # o.send(msg)
-                        send(o, msg)
-
-                    self.outputs.append(client)
-
-                elif s == sys.stdin:
-                    # handle standard input
-                    junk = sys.stdin.readline()
-                    running = 0
-                else:
-                    # handle all other sockets
-                    try:
-                        # data = s.recv(BUFSIZ)
-                        data = receive(s)
-                        if data:
-                            # Send as new client's message...
-                            msg = '\n#[' + self.getname(s) + ']>> ' + data
-                            # Send data to all except ourselves
-                            for o in self.outputs:
-                                if o != s:
-                                    # o.send(msg)
-                                    send(o, msg)
-                        else:
-                            print('chatserver: %d hung up' % s.fileno())
-                            self.clients -= 1
-                            s.close()
-                            inputs.remove(s)
-                            self.outputs.remove(s)
-
-                            # Send client leaving information to others
-                            msg = '\n(Hung up: Client from %s)' % self.getname(s)
-                            for o in self.outputs:
-                                # o.send(msg)
-                                send(o, msg)
-
-                    except socket.error as e:
-                        # Remove
-                        inputs.remove(s)
-                        self.outputs.remove(s)
-
-        self.server.close()
+def getname(client_socket):
+    # Return the printable name of the
+    # client, given its socket...
+    info = clientmap[client_socket]
+    host, name = info[0][0], info[1]
+    return '@'.join((name, host))
 
 
 if __name__ == "__main__":
-    ChatServer().serve()
+    BUFSIZ = 1024
+    server = socket.socket(socket.AF_INET,  socket.SOCK_STREAM, socket.IPPROTO_SCTP)
+    server.bind(('', 12000))
+    server.listen(10)
+    print("Сервер работает")
+
+    clientmap = {}
+    inputs = [server, sys.stdin]
+    outputs = []
+    clientsnumber = 0
+    running = 1
+    while running:
+        try:
+            inputready, outputready, exceptready = select.select(inputs, outputs, [])
+        except select.error as e:
+            break
+        except socket.error as e:
+            break
+        for conn in inputready:
+            if conn == server:
+                client, address = server.accept()
+                print("%d client connected from %s" % (client.fileno(), address))
+                username = receive(client).split('NAME: ')[1]
+
+                clientsnumber += 1
+                clientmap[client] = (address, username)
+                inputs.append(client)
+
+                msg = '\n Новый пользователь ' % username + ' присоединился'
+                outputs.append(client)
+                for out in outputs:
+                    send(out, msg)
+
+            elif conn == sys.stdin:
+                junk = sys.stdin.readline()
+                running = 0
+            else:
+                try:
+                    data = receive(conn)
+                    if data:
+                        msg = '\n#[' + getname(conn) + '] >> ' + data
+                        for out in outputs:
+                            if out != conn:
+                                send(out, msg)
+                    else:
+                        print('ChatServer %d hung up ' % conn.fileno())
+                        clientsnumber -= 1
+                        conn.close()
+                        inputs.remove(conn)
+                        outputs.remove(conn)
+                        msg = '\n(Hung up :Client  %s)' % getname(conn)
+                        for out in outputs:
+                            send(out, msg)
+                except socket.error as e:
+                    inputs.remove(conn)
+                    outputs.remove(conn)
+        server.close()
