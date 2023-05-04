@@ -32,7 +32,6 @@ if __name__ == "__main__":
     PORT = 12000
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_SCTP)
-    # this has no effect, why ?
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(('', PORT))
     server.listen(10)
@@ -62,8 +61,6 @@ if __name__ == "__main__":
             else:
                 # Data received from client, process it
                 try:
-                    # In Windows, sometimes when a TCP program closes abruptly,
-                    # a "Connection reset by peer" exception will be thrown
                     data = sock.recv(RECV_BUFFER).decode()
                     if data:
                         broadcast_data(sock, "\r" + '<' + getname(sock) + '> ' + data)
