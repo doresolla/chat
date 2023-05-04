@@ -32,6 +32,7 @@ if __name__ == "__main__":
     PORT = 12000
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_SCTP)
+    # this has no effect, why ?
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(('', PORT))
     server.listen(10)
@@ -40,12 +41,22 @@ if __name__ == "__main__":
     CONNECTION_LIST.append(server)
     clientmap = {}
 
-    print("Chat server started on port " + str(PORT))
+    print("Сервер чата запущен. Порт - " + str(PORT))
 
     while 1:
-        # Get the list sockets which are ready to be read through select
-        read_sockets, write_sockets, error_sockets = select.select(CONNECTION_LIST, [], [])
-
+        try:
+            # Get the list sockets which are ready to be read through select
+            read_sockets, write_sockets, error_sockets = select.select(CONNECTION_LIST, [], [])
+        except KeyboardInterrupt:
+            print('Сервер завершил работу.')
+            server.close()
+            break
+        except select.error as e:
+            print(' завершил работу')
+            break
+        except socket.error as e:
+            print('Сервер завершил работу')
+            break
         for sock in read_sockets:
             # New connection
             if sock == server:
@@ -60,14 +71,21 @@ if __name__ == "__main__":
             # Some incoming message from a client
             else:
                 # Data received from client, process it
-                try:
-                    data = sock.recv(RECV_BUFFER).decode()
-                    if data:
-                        broadcast_data(sock, "\r" + '<' + getname(sock) + '> ' + data)
-                except:
+                # In Windows, sometimes when a TCP program closes abruptly,
+                # a "Connection reset by peer" exception will be thrown
+                data = sock.recv(RECV_BUFFER).decode()
+                if data:
+                    broadcast_data(sock, "\r" + '<' + getname(sock) + '> ' + data)
+                else:
                     broadcast_data(sock, "Client (%s) is offline" % getname(sock))
                     print("Client (%s) is offline" % getname(sock))
                     sock.close()
                     CONNECTION_LIST.remove(sock)
                     continue
-    server.close()
+            # except:
+            #     broadcast_data(sock, "Client (%s) is offline" % getname(sock))
+            #     print("Client (%s) is offline" % getname(sock))
+            #     sock.close()
+            #     CONNECTION_LIST.remove(sock)
+            #     continue
+server.close()

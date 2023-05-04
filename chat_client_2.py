@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_SCTP)
     s.settimeout(2)
-
+    running = 1
     # connect to remote host
     try:
         s.connect(('localhost', 12000))
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # print('Connected to remote host. Start sending messages')
     # prompt()
 
-    while 1:
+    while running:
         socket_list = [sys.stdin, s]
         # Get the list sockets which are readable
         read_sockets, write_sockets, error_sockets = select.select(socket_list, [], [])
@@ -48,5 +48,10 @@ if __name__ == "__main__":
             # user entered a message
             else:
                 msg = sys.stdin.readline()
-                s.send(msg.encode())
-                prompt()
+                if msg == 'exit':
+                    s.close()
+                    running = 0
+                    break
+                else:
+                    s.send(msg.encode())
+                    prompt()
