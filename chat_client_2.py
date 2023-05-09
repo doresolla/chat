@@ -17,7 +17,7 @@ if __name__ == "__main__":
     running = 1
     # connect to remote host
     try:
-        client.connect(('localhost', 12000))
+        client.connect(('192.168.100.16', 12000))
         print('Подключение к серверу прошло успешно. Можно отправлять сообщения')
         username = input('Введите своё имя  \n')
         client.send(username.encode())
